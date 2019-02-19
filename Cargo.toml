@@ -2,7 +2,7 @@
 members = [ "crates/*" ]
 
 [profile.release]
-incremental = true
+incremental = false
 debug = true
 
 [patch.'crates-io']
