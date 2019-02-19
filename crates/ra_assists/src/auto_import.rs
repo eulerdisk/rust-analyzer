@@ -1,3 +1,4 @@
+use ra_text_edit::TextEditBuilder;
 use hir::db::HirDatabase;
 
 use ra_syntax::{
@@ -371,7 +372,7 @@ fn best_action_for_target<'b, 'a: 'b>(
     }
 }
 
-fn make_assist(action: &ImportAction, target: &[&ast::PathSegment], edit: &mut AssistBuilder) {
+fn make_assist(action: &ImportAction, target: &[&ast::PathSegment], edit: &mut TextEditBuilder) {
     match action {
         ImportAction::AddNewUse { anchor, add_after_anchor } => {
             make_assist_add_new_use(anchor, *add_after_anchor, target, edit)
@@ -405,7 +406,7 @@ fn make_assist_add_new_use(
     anchor: &Option<&SyntaxNode>,
     after: bool,
     target: &[&ast::PathSegment],
-    edit: &mut AssistBuilder,
+    edit: &mut TextEditBuilder,
 ) {
     if let Some(anchor) = anchor {
         let indent = ra_fmt::leading_indent(anchor);
@@ -434,7 +435,7 @@ fn make_assist_add_in_tree_list(
     tree_list: &ast::UseTreeList,
     target: &[&ast::PathSegment],
     add_self: bool,
-    edit: &mut AssistBuilder,
+    edit: &mut TextEditBuilder,
 ) {
     let last = tree_list.use_trees().last();
     if let Some(last) = last {
@@ -463,7 +464,7 @@ fn make_assist_add_nested_import(
     first_segment_to_split: &Option<&ast::PathSegment>,
     target: &[&ast::PathSegment],
     add_self: bool,
-    edit: &mut AssistBuilder,
+    edit: &mut TextEditBuilder,
 ) {
     let use_tree = path.syntax().ancestors().find_map(ast::UseTree::cast);
     if let Some(use_tree) = use_tree {
@@ -488,7 +489,7 @@ fn make_assist_add_nested_import(
             buf.push_str(", ");
         }
         edit.insert(start, buf);
-        edit.insert(end, "}");
+        edit.insert(end, "}".to_string());
     }
 }
 
@@ -496,7 +497,7 @@ fn apply_auto_import<'a>(
     container: &SyntaxNode,
     path: &ast::Path,
     target: &[&'a ast::PathSegment],
-    edit: &mut AssistBuilder,
+    edit: &mut TextEditBuilder,
 ) {
     let action = best_action_for_target(container, path, target);
     make_assist(&action, target, edit);
@@ -507,6 +508,25 @@ fn apply_auto_import<'a>(
             first.syntax().range().start(),
             last.syntax().range().start(),
         ));
+    }
+}
+
+pub fn auto_import_text_edit<'a>(
+    position: &SyntaxNode,
+    path: &ast::Path,
+    target: &[&'a ast::PathSegment],
+    edit: &mut TextEditBuilder,
+) {
+    let container = position.ancestors().find_map(|n| {
+        if let Some(module) = ast::Module::cast(n) {
+            return module.item_list().map(ast::AstNode::syntax);
+        }
+        ast::SourceFile::cast(n).map(ast::AstNode::syntax)
+    });
+
+    if let Some(container) = container {
+        let action = best_action_for_target(container, path, target);
+        make_assist(&action, target, edit);
     }
 }
 
@@ -528,14 +548,18 @@ pub(crate) fn auto_import(mut ctx: AssistCtx<impl HirDatabase>) -> Option<Assist
             ctx.add_action(
                 format!("import {} in mod {}", fmt_segments(&segments), name.text()),
                 |edit| {
-                    apply_auto_import(item_list.syntax(), path, &segments, edit);
+                    let mut text_edit = TextEditBuilder::default();
+                    apply_auto_import(item_list.syntax(), path, &segments, &mut text_edit);
+                    edit.set_edit_builder(text_edit);
                 },
             );
         }
     } else {
         let current_file = node.ancestors().find_map(ast::SourceFile::cast)?;
         ctx.add_action(format!("import {} in the current file", fmt_segments(&segments)), |edit| {
-            apply_auto_import(current_file.syntax(), path, &segments, edit);
+            let mut text_edit = TextEditBuilder::default();
+            apply_auto_import(current_file.syntax(), path, &segments, &mut text_edit);
+            edit.set_edit_builder(text_edit);
         });
     }
 

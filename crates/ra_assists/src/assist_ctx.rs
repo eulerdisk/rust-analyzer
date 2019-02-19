@@ -139,6 +139,10 @@ impl AssistBuilder {
         self.replace(node.range(), replace_with)
     }
 
+    pub(crate) fn set_edit_builder(&mut self, edit: TextEditBuilder) {
+        self.edit = edit;
+    }
+
     #[allow(unused)]
     pub(crate) fn delete(&mut self, range: TextRange) {
         self.edit.delete(range)
