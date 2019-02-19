@@ -36,6 +36,7 @@ mod expr;
 mod generics;
 mod docs;
 mod resolve;
+mod import;
 
 mod code_model_api;
 mod code_model_impl;
@@ -61,6 +62,7 @@ pub use self::{
     adt::AdtDef,
     expr::{ExprScopes, ScopesWithSyntaxMapping},
     resolve::{Resolver, Resolution},
+    import::ImportResolver,
 };
 
 pub use self::code_model_api::{

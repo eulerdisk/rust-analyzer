@@ -15,7 +15,8 @@ use crate::{
     adt::{StructData, EnumData},
     impl_block::{ModuleImplBlocks, ImplSourceMap},
     generics::{GenericParams, GenericDef},
-    ids::SourceFileItemId, nameres::Namespace
+    ids::SourceFileItemId, nameres::Namespace,
+    import::ImportItemMap
 };
 
 #[salsa::query_group(PersistentHirDatabaseStorage)]
@@ -56,6 +57,9 @@ pub trait PersistentHirDatabase: SourceDatabase + AsRef<HirInterner> {
 
     #[salsa::invoke(crate::nameres::ItemMap::item_map_query)]
     fn item_map(&self, krate: Crate) -> Arc<ItemMap>;
+
+    #[salsa::invoke(crate::import::ImportItemMap::import_item_map_query)]
+    fn import_item_map(&self, krate: Crate) -> Arc<ImportItemMap>;
 
     #[salsa::invoke(crate::module_tree::ModuleTree::module_tree_query)]
     fn module_tree(&self, krate: Crate) -> Arc<ModuleTree>;

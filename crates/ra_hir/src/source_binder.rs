@@ -15,6 +15,7 @@ use ra_syntax::{
 use crate::{
     HirDatabase, Function, ModuleDef, Struct, Enum,
     AsName, Module, HirFileId, Crate, Trait, Resolver,
+    ImportResolver,
     ids::{LocationCtx, SourceFileItemId},
     expr
 };
@@ -252,4 +253,16 @@ pub fn resolver_for_node(db: &impl HirDatabase, file_id: FileId, node: &SyntaxNo
             }
         })
         .unwrap_or_default()
+}
+
+pub fn import_resolver_for_position(
+    db: &impl HirDatabase,
+    position: FilePosition,
+) -> Option<ImportResolver> {
+    let file_id: HirFileId = position.file_id.into();
+    let source_root_id = db.file_source_root(file_id.as_original_file());
+    db.source_root_crates(source_root_id)
+        .iter()
+        .map(|&crate_id| ImportResolver::new(Crate { crate_id }))
+        .next()
 }

@@ -5,7 +5,7 @@ use ra_syntax::{
     algo::{find_leaf_at_offset, find_covering_node, find_node_at_offset},
     SyntaxKind::*,
 };
-use hir::{source_binder, Resolver};
+use hir::{source_binder, Resolver, ImportResolver};
 
 use crate::{db, FilePosition};
 
@@ -17,6 +17,7 @@ pub(crate) struct CompletionContext<'a> {
     pub(super) offset: TextUnit,
     pub(super) leaf: &'a SyntaxNode,
     pub(super) resolver: Resolver,
+    pub(super) import_resolver: Option<ImportResolver>,
     pub(super) module: Option<hir::Module>,
     pub(super) function: Option<hir::Function>,
     pub(super) function_syntax: Option<&'a ast::FnDef>,
@@ -26,6 +27,7 @@ pub(crate) struct CompletionContext<'a> {
     pub(super) is_trivial_path: bool,
     /// If not a trivial, path, the prefix (qualifier).
     pub(super) path_prefix: Option<hir::Path>,
+    pub(super) path_ident: Option<hir::Path>,
     pub(super) after_if: bool,
     /// `true` if we are a statement or a last expr in the block.
     pub(super) can_be_stmt: bool,
@@ -44,6 +46,7 @@ impl<'a> CompletionContext<'a> {
         position: FilePosition,
     ) -> Option<CompletionContext<'a>> {
         let resolver = source_binder::resolver_for_position(db, position);
+        let import_resolver = source_binder::import_resolver_for_position(db, position);
         let module = source_binder::module_from_position(db, position);
         let leaf = find_leaf_at_offset(original_file.syntax(), position.offset).left_biased()?;
         let mut ctx = CompletionContext {
@@ -51,6 +54,7 @@ impl<'a> CompletionContext<'a> {
             leaf,
             offset: position.offset,
             resolver,
+            import_resolver,
             module,
             function: None,
             function_syntax: None,
@@ -58,6 +62,7 @@ impl<'a> CompletionContext<'a> {
             is_param: false,
             is_trivial_path: false,
             path_prefix: None,
+            path_ident: None,
             after_if: false,
             can_be_stmt: false,
             is_new_item: false,
@@ -151,6 +156,11 @@ impl<'a> CompletionContext<'a> {
                     return;
                 }
             }
+
+            if let Some(name_ref) = segment.name_ref() {
+                self.path_ident = Some(hir::Path::from_name_ref(name_ref));
+            }
+
             if path.qualifier().is_none() {
                 self.is_trivial_path = true;
 

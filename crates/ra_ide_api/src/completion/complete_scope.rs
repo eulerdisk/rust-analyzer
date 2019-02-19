@@ -1,3 +1,5 @@
+use ra_text_edit::TextEditBuilder;
+use ra_assists::auto_import;
 use crate::completion::{CompletionItem, Completions, CompletionKind, CompletionContext};
 
 pub(super) fn complete_scope(acc: &mut Completions, ctx: &CompletionContext) {
@@ -11,6 +13,53 @@ pub(super) fn complete_scope(acc: &mut Completions, ctx: &CompletionContext) {
             .from_resolution(ctx, &res)
             .add_to(acc)
     });
+
+    if let (Some(name), Some(import_resolver)) =
+        (ctx.path_ident.as_ref().and_then(hir::Path::as_ident), ctx.import_resolver.as_ref())
+    {
+        import_resolver.resolve_name(ctx.db, name).into_iter().for_each(|(name, path)| {
+            let edit = {
+                let mut builder = TextEditBuilder::default();
+                builder.replace(ctx.source_range(), name.to_string());
+                let segments = auto_import::collect_hir_path_segments(&path);
+                auto_import::auto_import_text_edit(ctx.leaf, ctx.leaf, &segments, &mut builder);
+                builder.finish()
+            };
+            CompletionItem::new(
+                CompletionKind::Reference,
+                ctx.source_range(),
+                build_import_label(&name, &path),
+            )
+            .text_edit(edit)
+            .add_to(acc)
+        });
+    }
+}
+
+fn build_import_label(name: &str, path: &hir::Path) -> String {
+    let mut buf = String::with_capacity(64);
+    buf.push_str(name);
+    buf.push_str(" (");
+    fmt_path(path, &mut buf);
+    buf.push_str(")");    
+    buf
+}
+
+fn fmt_path(path: &hir::Path, buf: &mut String) {
+    match path.kind {
+        hir::PathKind::Crate => buf.push_str("crate::"),
+        hir::PathKind::Self_ => buf.push_str("self::"),
+        hir::PathKind::Super => buf.push_str("super::"),
+        _ => {}
+    }
+    let mut segments = path.segments.iter();
+    if let Some(s) = segments.next() {
+        buf.push_str(&s.name.as_smolstr());
+    }
+    for s in segments {
+        buf.push_str("::");
+        buf.push_str(&s.name.as_smolstr());
+    }
 }
 
 #[cfg(test)]

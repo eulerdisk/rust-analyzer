@@ -87,7 +87,7 @@ mod introduce_variable;
 mod replace_if_let_with_match;
 mod split_import;
 mod remove_dbg;
-mod auto_import;
+pub mod auto_import;
 
 fn all_assists<DB: HirDatabase>() -> &'static [fn(AssistCtx<DB>) -> Option<Assist>] {
     &[
